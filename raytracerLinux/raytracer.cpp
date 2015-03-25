@@ -16,7 +16,6 @@
 #include <cmath>
 #include <iostream>
 #include <cstdlib>
-#include <stdio.h>
 
 Raytracer::Raytracer() : _lightSource(NULL) {
 	_root = new SceneDagNode();
@@ -47,7 +46,7 @@ SceneDagNode* Raytracer::addObject( SceneDagNode* parent,
 		parent->next = node;
 	}
 	
-	return node;;
+	return node;
 }
 
 LightListNode* Raytracer::addLightSource( LightSource* light ) {
@@ -161,24 +160,26 @@ void Raytracer::traverseScene( SceneDagNode* node, Ray3D& ray ) {
 	// Applies transformation of the current node to the global
 	// transformation matrices.
 	_modelToWorld = _modelToWorld*node->trans;
-	_worldToModel = node->invtrans*_worldToModel; 
+	_worldToModel = node->invtrans*_worldToModel;
 	if (node->obj) {
 		// Perform intersection.
 		if (node->obj->intersect(ray, _worldToModel, _modelToWorld)) {
-                        ray.intersection.mat = node->mat;
+			ray.intersection.mat = node->mat;
 		}
 	}
+	
 	// Traverse the children.
 	childPtr = node->child;
 	while (childPtr != NULL) {
 		traverseScene(childPtr, ray);
 		childPtr = childPtr->next;
 	}
-
+	
 	// Removes transformation of the current node from the global
 	// transformation matrices.
 	_worldToModel = node->trans*_worldToModel;
 	_modelToWorld = _modelToWorld*node->invtrans;
+	
 }
 
 void Raytracer::computeShading( Ray3D& ray ) {
@@ -218,11 +219,10 @@ void Raytracer::flushPixelBuffer( char *file_name ) {
 Colour Raytracer::shadeRay( Ray3D& ray ) {
 	Colour col(0.0, 0.0, 0.0); 
 	traverseScene(_root, ray); 
-	
 	// Don't bother shading if the ray didn't hit 
 	// anything.
+	
 	if (!ray.intersection.none) {
-                //printf("go shade\n");
 		computeShading(ray); 
 		col = ray.col;  
 	}
@@ -239,7 +239,7 @@ void Raytracer::render( int width, int height, Point3D eye, Vector3D view,
 	_scrWidth = width;
 	_scrHeight = height;
 	double factor = (double(height)/2)/tan(fov*M_PI/360.0);
-
+		
 	initPixelBuffer();
 	viewToWorld = initInvViewMatrix(eye, view, up);
 
@@ -253,31 +253,29 @@ void Raytracer::render( int width, int height, Point3D eye, Vector3D view,
 			imagePlane[0] = (-double(width)/2 + 0.5 + j)/factor;
 			imagePlane[1] = (-double(height)/2 + 0.5 + i)/factor;
 			imagePlane[2] = -1;
-
+			
 			// TODO: Convert ray to world space and call 
-			// shadeRay(ray) to generate pixel colour. 
-                          
-                        //position of pixel in world coordinates
-                        Point3D pixelPointWorld;
-                        //direction of pixel relative to camera origin
-                        Vector3D pixelDirection;
-                        //direction of the casted ray
-                        Vector3D direction;	
-		
-
-                        
-                        pixelPointWorld = viewToWorld*imagePlane;
-                        pixelDirection = viewToWorld*imagePlane-eye;
-
-                        //direction = pixelPointWorld - eye;
-
-                        Ray3D ray(pixelPointWorld, pixelDirection);
-                        
-                        ray.dir.normalize();
-                        //ray = ray - eye;
-
+			// shadeRay(ray) to generate pixel colour. 	
+			//position of pixel in world coordinates
+			Point3D pixelPointWorld;
+			
+			//direction of pixel relative to camera origin
+			Vector3D pixelDirection;
+            
+			//direction of the casted ray
+			Vector3D direction;
+				
+			pixelPointWorld = viewToWorld*imagePlane;
+			pixelDirection = pixelPointWorld-eye;
+			
+			// ?????????
+			Ray3D ray(eye, pixelDirection);
+			
+			//Ray3D ray(pixelPointWorld, direction);
+			ray.dir.normalize();
+			
 			Colour col = shadeRay(ray); 
-
+			
 			_rbuffer[i*width+j] = int(col[0]*255);
 			_gbuffer[i*width+j] = int(col[1]*255);
 			_bbuffer[i*width+j] = int(col[2]*255);
@@ -323,7 +321,7 @@ int main(int argc, char* argv[])
 
 	// Add a unit square into the scene with material mat.
 	SceneDagNode* sphere = raytracer.addObject( new UnitSphere(), &gold );
-	SceneDagNode* plane = raytracer.addObject( new UnitSquare(), &jade );
+	//SceneDagNode* plane = raytracer.addObject( new UnitSquare(), &jade );
 	
 	// Apply some transformations to the unit square.
 	double factor1[3] = { 1.0, 2.0, 1.0 };
@@ -333,9 +331,9 @@ int main(int argc, char* argv[])
 	raytracer.rotate(sphere, 'z', 45); 
 	raytracer.scale(sphere, Point3D(0, 0, 0), factor1);
 
-	raytracer.translate(plane, Vector3D(0, 0, -7));	
-	raytracer.rotate(plane, 'z', 45); 
-	raytracer.scale(plane, Point3D(0, 0, 0), factor2);
+	//raytracer.translate(plane, Vector3D(0, 0, -7));	
+	//raytracer.rotate(plane, 'z', 45); 
+	//raytracer.scale(plane, Point3D(0, 0, 0), factor2);
 
 	// Render the scene, feel free to make the image smaller for
 	// testing purposes.	
