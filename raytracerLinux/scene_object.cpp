@@ -139,13 +139,14 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
             //normalize the vectorest 
             ray.intersection.normal = normal;
             ray.intersection.normal.normalize();
+            ray.intersection.point = modelToWorld*ray.intersection.point;
+            ray.intersection.normal = transNorm(modelToWorld, ray.intersection.normal);
+            ray.intersection.none = true;
             return true;
             
         }
 
-        ray.intersection.point = modelToWorld*ray.intersection.point;
-        ray.intersection.normal = transNorm(modelToWorld, ray.intersection.normal);
-        ray.intersection.none = true;
+
  
 	return false;
 }
