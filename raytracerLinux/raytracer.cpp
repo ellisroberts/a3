@@ -162,6 +162,7 @@ void Raytracer::traverseScene( SceneDagNode* node, Ray3D& ray ) {
 	_modelToWorld = _modelToWorld*node->trans;
 	_worldToModel = node->invtrans*_worldToModel;
 	if (node->obj) {
+	
 		// Perform intersection.
 		if (node->obj->intersect(ray, _worldToModel, _modelToWorld)) {
 			ray.intersection.mat = node->mat;
@@ -246,6 +247,7 @@ void Raytracer::render( int width, int height, Point3D eye, Vector3D view,
 	// Construct a ray for each pixel.
 	for (int i = 0; i < _scrHeight; i++) {
 		for (int j = 0; j < _scrWidth; j++) {
+		
 			// Sets up ray origin and direction in view space, 
 			// image plane is at z = -1.
 			Point3D origin(0, 0, 0);
@@ -267,11 +269,7 @@ void Raytracer::render( int width, int height, Point3D eye, Vector3D view,
 				
 			pixelPointWorld = viewToWorld*imagePlane;
 			pixelDirection = pixelPointWorld-eye;
-			
-			// ?????????
 			Ray3D ray(eye, pixelDirection);
-			
-			//Ray3D ray(pixelPointWorld, direction);
 			ray.dir.normalize();
 			
 			Colour col = shadeRay(ray); 
@@ -320,16 +318,16 @@ int main(int argc, char* argv[])
 				Colour(0.9, 0.9, 0.9) ) );
 
 	// Add a unit square into the scene with material mat.
-	//SceneDagNode* sphere = raytracer.addObject( new UnitSphere(), &gold );
+	SceneDagNode* sphere = raytracer.addObject( new UnitSphere(), &gold );
 	SceneDagNode* plane = raytracer.addObject( new UnitSquare(), &jade );
 	
 	// Apply some transformations to the unit square.
 	double factor1[3] = { 1.0, 2.0, 1.0 };
 	double factor2[3] = { 6.0, 6.0, 6.0 };
-	//raytracer.translate(sphere, Vector3D(0, 0, -5));	
-	//raytracer.rotate(sphere, 'x', -45); 
-	//raytracer.rotate(sphere, 'z', 45); 
-	//raytracer.scale(sphere, Point3D(0, 0, 0), factor1);
+	raytracer.translate(sphere, Vector3D(0, 0, -5));	
+	raytracer.rotate(sphere, 'x', -45); 
+	raytracer.rotate(sphere, 'z', 45); 
+	raytracer.scale(sphere, Point3D(0, 0, 0), factor1);
 
 	raytracer.translate(plane, Vector3D(0, 0, -7));	
 	raytracer.rotate(plane, 'z', 45); 

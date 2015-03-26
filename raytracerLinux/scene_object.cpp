@@ -42,25 +42,22 @@ bool UnitSquare::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
 	// Normalize
 	R.normalize();
 	N.normalize();
-
-	// Compute the normal in the world
-	ray.intersection.normal = modelToWorld * N;
-	ray.intersection.normal.normalize();
 	
 	// Check if parallel
 	if(fabs(N.dot(R)) < 1e-25f){
-		ray.intersection.none = true;
 		return false;
 	}
 	
 	// Compute t value
 	Vector3D dR1S1 = R1 - S1;
 	double t = -N.dot(dR1S1) / N.dot(R);
-	ray.intersection.t_value = t;
+	
+	if(ray.intersection.t_value > t && !ray.intersection.none){
+		return false;
+	}
 	
 	// Let M be the intersection point between the ray and the surface
 	Point3D M = R1 + t * R;
-	ray.intersection.point = modelToWorld * M;
 	
 	// Get the vector between M and S1
 	Vector3D dMS1 = M - S1;
@@ -71,10 +68,15 @@ bool UnitSquare::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
 	
 	// Check if the intersection point belongs to the square
 	if(u >= 0.0 && u <= dS21.dot(dS21) && v >= 0.0 && v <= dS31.dot(dS31) && t > 0){
+	
+		// Update intersection
+		ray.intersection.normal = modelToWorld * N;
+		ray.intersection.normal.normalize();	
+		ray.intersection.t_value = t;
+		ray.intersection.point = modelToWorld * M;
 		ray.intersection.none = false;
 		return true;
 	}else{
-		ray.intersection.none = true;
 		return false;
 	} 
 }
@@ -92,18 +94,19 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
 	// to simplify the intersection test.
 
         //convert to model coordinates
-        Point3D origin = worldToModel*ray.origin;
-        Vector3D dir = worldToModel*ray.dir;
+        Point3D R1 = worldToModel*ray.origin;
+        Vector3D R = worldToModel*ray.dir;
+		
+		R.normalize();
 
-        Point3D center(0,0,0);
-        Vector3D difference = origin - center;
-        
-        //Get the lamba value of the intersection with the sphere
-        double lambda;
-        double A = dir.dot(dir);
-        double B = 2*dir.dot(difference);
-        double C = difference.dot(difference) - 1;	
-        double D = B*B-A*C;
+        Point3D pc(0,0,0);
+	
+        //Get the lambda value of the intersection with the sphere
+        double t;
+        double A = R.dot(R);
+        double B = 2*R.dot(R1-pc);
+        double C = (R1 - pc).dot(R1 - pc) - 1;	
+        double D = B*B-4*A*C;
  
         //printf("origin is %f %f %f", origin[0], origin[1], origin[2]);
         //printf("dir is %f %f %f", dir[0], dir[1], dir[2]);
@@ -112,40 +115,34 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
         //not intersection
         if (D < 0.0)
         {
-			ray.intersection.none = true;
             return false;
         }
+		else{
+			double t1 = -B/2*A + sqrt(D)/2*A;
+        	double t2 = -B/2*A - sqrt(D)/2*A;
+			
+			//there will be two lambda values. choose the smaller one.
+			t = t1;
+        	if (t2 < t1){
+            	t = t2;   
+			}
+        
 
-        double lambda1 = -B/A + sqrt(D)/A;
-        double lambda2 = -B/A - sqrt(D)/A;
-
-        //there will be two lambda values. choose the smaller one.
-        if (lambda1 >= lambda2)
-        {
-            lambda = lambda2;   
-        }
-        else
-        {
-            lambda = lambda1;
-        }  
- 
-        if (ray.intersection.none || (lambda < ray.intersection.t_value))
-        {
-            ray.intersection.t_value = lambda;
-            ray.intersection.none = false;
-            //the intersection point
-            ray.intersection.point = ray.origin + ray.intersection.t_value*(ray.dir);
-            Vector3D normal(ray.intersection.point[0], ray.intersection.point[1], ray.intersection.point[2]);
-            //normalize the vectorest 
-            ray.intersection.normal = normal;
-            ray.intersection.normal.normalize();
-            return true;
-            
-        }
-
-        ray.intersection.point = modelToWorld*ray.intersection.point;
-        ray.intersection.normal = transNorm(modelToWorld, ray.intersection.normal);
-        ray.intersection.none = true;
- 
-	return false;
+			if(ray.intersection.t_value > t && !ray.intersection.none){
+				return false;
+			}
+	
+			//the intersection point
+            Point3D M = R1 + t*R;
+            Vector3D N = M - pc;
+			N.normalize();
+			
+			// Update intersection
+			ray.intersection.normal = modelToWorld * N;
+			ray.intersection.normal.normalize();
+			ray.intersection.point = modelToWorld * M;
+			ray.intersection.t_value = t;
+			ray.intersection.none = false;
+			return true;
+		}
 }
