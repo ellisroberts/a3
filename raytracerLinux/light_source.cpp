@@ -22,28 +22,29 @@ void PointLight::shade( Ray3D& ray ) {
 	// is available.  So be sure that traverseScene() is called on the ray 
 	// before this function.  
 	
-	Colour ambient = ray.intersection.mat->ambient;
-	Colour diffuse = ray.intersection.mat->diffuse;
-	Colour specular = ray.intersection.mat->specular;
-	double specular_exp = ray.intersection.mat->specular_exp;
+	Colour ka = ray.intersection.mat->ambient;
+	Colour kd = ray.intersection.mat->diffuse;
+	Colour ks = ray.intersection.mat->specular;
 	Vector3D N = ray.intersection.normal;
-	Vector3D R = ray.dir;
+	Vector3D D = ray.dir;
+	Vector3D MS = -(2*D.dot(N) * N) + D;
+	Vector3D S = _pos - ray.intersection.point;
+	Vector3D M = (2*S.dot(N) * N) - S;
+	Vector3D C = -D;
+	double s_exp = ray.intersection.mat->specular_exp;
+	
 	N.normalize();
-	R.normalize();
+	D.normalize();
+	MS.normalize();
+	S.normalize();
+	M.normalize();
+	C.normalize();
 	
-	//std::cout << "mat:" << ambient << diffuse << specular << "\n";
-	
-	
-	// Direction of the perfect reflected ray
-	Vector3D S = R - 2*(R.dot(N)/N.dot(N)) * N;
-	
-	Colour Ia = ambient;
-	Colour Id = (N.dot(R))*diffuse;
-	Colour Is = (pow((N.dot(S)), specular_exp))*specular;
+	Colour Ia = _col_ambient * ka;
+	Colour Id = fmax(0, N.dot(S)) * (_col_diffuse * kd);
+	Colour Is = (pow(fmax(0, C.dot(M)), s_exp)) * _col_specular * ks;
 	
 	ray.col = ray.col + Ia + Id + Is;
-	
-	//std::cout << "mat:" << N << " " << R << "\n";
-	//std::cout << ray.col << "\n";
+	ray.col.clamp();
 }
 
