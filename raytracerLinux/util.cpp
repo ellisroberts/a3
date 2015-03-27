@@ -142,6 +142,11 @@ Vector3D Vector3D::cross(const Vector3D& other) const
 			m_data[0]*other[1] - m_data[1]*other[0]);
 }
 
+bool Point3D::equal(const Point3D& other) const
+{
+	return ((m_data[0] == other[0]) && (m_data[1] == other[1]) && (m_data[2] == other[2]));
+}
+
 Vector3D operator *(double s, const Vector3D& v)
 {
   return Vector3D(s*v[0], s*v[1], s*v[2]);

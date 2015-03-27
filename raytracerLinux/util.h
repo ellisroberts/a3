@@ -29,7 +29,8 @@ public:
 	Point3D& operator =(const Point3D& other); 
 	double& operator[](int i); 
 	double operator[](int i) const; 
-
+	bool equal(const Point3D& other) const;
+	
 private:
 	double m_data[3];
 };
@@ -129,9 +130,8 @@ Colour operator +(const Colour& u, const Colour& v);
 std::ostream& operator <<(std::ostream& o, const Colour& c); 
 
 struct Material {
-	Material( Colour ambient, Colour diffuse, Colour specular, double exp ) :
-		ambient(ambient), diffuse(diffuse), specular(specular), 
-		specular_exp(exp) {}
+	Material( Colour ambient, Colour diffuse, Colour specular, double exp , double ref_idx) :
+		ambient(ambient), diffuse(diffuse), specular(specular), specular_exp(exp), ref_idx(ref_idx) {}
 	
 	// Ambient components for Phong shading.
 	Colour ambient; 
@@ -141,6 +141,9 @@ struct Material {
 	Colour specular;
 	// Specular expoent.
 	double specular_exp;
+	
+	// Refraction index
+	double ref_idx;
 };
 
 struct Intersection {
@@ -167,6 +170,10 @@ struct Ray3D {
 	Ray3D( Point3D p, Vector3D v ) : origin(p), dir(v) {
 		intersection.none = true;
 	}
+	
+	// Max depth recursion
+	int maxDepth;
+	
 	// Origin and direction of the ray.
 	Point3D origin;
 	Vector3D dir;

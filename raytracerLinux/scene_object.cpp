@@ -112,7 +112,7 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
         //printf("dir is %f %f %f", dir[0], dir[1], dir[2]);
         //printf("point is A is %f B is %f C is %f D is %f\n", A, B, C, D);
 
-        //not intersection
+        // No intersection
         if (D < 0.0)
         {
             return false;
@@ -122,12 +122,20 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
         	double t2 = -B/2*A - sqrt(D)/2*A;
 			
 			//there will be two lambda values. choose the smaller one.
-			t = t1;
-        	if (t2 < t1){
-            	t = t2;   
+        	if(fmax(t1, t2) < 0 || t1 == t2){
+				// Intersect in wrong direction
+				return false;
 			}
-        
-
+			else{
+				// Get the minimum non negative element
+				if(fmin(t1, t2) > 0){
+					t = fmin(t1, t2);
+				}
+				else{
+					t = fmax(t1, t2);
+				}
+			}
+			
 			if(ray.intersection.t_value > t && !ray.intersection.none){
 				return false;
 			}

@@ -188,10 +188,22 @@ void Raytracer::computeShading( Ray3D& ray ) {
 	for (;;) {
 		if (curLight == NULL) break;
 		// Each lightSource provides its own shading function.
-
-		// Implement shadows here if needed.
-
-		curLight->light->shade(ray);
+		// Shadows
+		Point3D R1 = ray.intersection.point - 0.0000001 * ray.dir;;
+		Vector3D R = curLight->light->get_position() - R1;
+		R.normalize();
+		Ray3D shadowRay(R1, R);
+		
+		traverseScene(_root, shadowRay);
+		if(shadowRay.intersection.none){
+			curLight->light->shade(ray);
+		}else{
+			Colour ka = ray.intersection.mat->ambient;
+			Colour Ia = curLight->light->get_ambient() * ka;
+			ray.col = ray.col + Ia * ka;
+			ray.col.clamp();
+		}
+		
 		curLight = curLight->next;
 	}
 }
@@ -218,20 +230,67 @@ void Raytracer::flushPixelBuffer( char *file_name ) {
 }
 
 Colour Raytracer::shadeRay( Ray3D& ray ) {
-	Colour col(0.0, 0.0, 0.0); 
-	traverseScene(_root, ray); 
+	Colour curRayCol(0.0, 0.0, 0.0); 
+	Colour reflRayCol(0.0, 0.0, 0.0);
+	Colour refrRayCol(0.0, 0.0, 0.0);
+	traverseScene(_root, ray);
+	
 	// Don't bother shading if the ray didn't hit 
 	// anything.
-	
-	if (!ray.intersection.none) {
-		computeShading(ray); 
-		col = ray.col;  
+	if (!ray.intersection.none && (ray.maxDepth < 3)) {
+		computeShading(ray);
+		curRayCol = ray.col;
+		
+		// Spawn Reflection
+		Vector3D N = ray.intersection.normal;
+		Vector3D V = ray.dir;
+		
+		N.normalize();
+		V.normalize();
+		
+		Vector3D R = V - 2*(N.dot(V))*N;
+		Point3D R1 = ray.intersection.point;
+		
+		R.normalize();
+		
+		Ray3D reflRay(R1, R);
+		reflRay.maxDepth = ray.maxDepth + 1;
+		
+		reflRayCol = 0.2*shadeRay(reflRay);
+		
+		// Spawn Refraction
+		double n1;
+		double n2;
+		if((ray.maxDepth + 1)%2 == 0){
+		
+			// Outside/Inside
+			n1 = 1;
+			n2 = ray.intersection.mat->ref_idx;
+
+		}else{
+		
+			// Inside/Outside
+			n1 = ray.intersection.mat->ref_idx;
+			n2 = 1;
+		}
+		
+		double c1 = -N.dot(V);
+		double n = n1/n2;
+		double c2 = sqrt(1-pow(n, 2) * (1 - pow(c1, 2)));
+		
+		Point3D Rr1 = ray.intersection.point;
+		Vector3D Rr = (n * V) + (n * c1 - c2) * N;
+		Rr.normalize();
+		
+		//Ray3D refrRay(Rr1, Rr);
+		//refrRay.maxDepth = ray.maxDepth + 1;
+		
+		//refrRayCol = shadeRay(refrRay);
 	}
-
-	// You'll want to call shadeRay recursively (with a different ray, 
-	// of course) here to implement reflection/refraction effects.  
-
-	return col; 
+	curRayCol = curRayCol + reflRayCol + refrRayCol;
+	curRayCol = curRayCol;
+	curRayCol.clamp();
+	return curRayCol; 
 }	
 
 void Raytracer::render( int width, int height, Point3D eye, Vector3D view, 
@@ -270,6 +329,7 @@ void Raytracer::render( int width, int height, Point3D eye, Vector3D view,
 			pixelPointWorld = viewToWorld*imagePlane;
 			pixelDirection = pixelPointWorld-eye;
 			Ray3D ray(eye, pixelDirection);
+			ray.maxDepth = 0;
 			ray.dir.normalize();
 			
 			Colour col = shadeRay(ray); 
@@ -308,10 +368,10 @@ int main(int argc, char* argv[])
 	// Defines a material for shading.
 	Material gold( Colour(0.3, 0.3, 0.3), Colour(0.75164, 0.60648, 0.22648), 
 			Colour(0.628281, 0.555802, 0.366065), 
-			51.2 );
+			51.2 , 0.27049);
 	Material jade( Colour(0, 0, 0), Colour(0.54, 0.89, 0.63), 
 			Colour(0.316228, 0.316228, 0.316228), 
-			12.8 );
+			12.8 , 1.627);
 
 	// Defines a point light source.
 	raytracer.addLightSource( new PointLight(Point3D(0, 0, 5), 
