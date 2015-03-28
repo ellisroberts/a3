@@ -33,6 +33,7 @@ bool UnitSquare::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
 	Point3D S1 = Point3D(0.5, 0.5, 0);
 	Point3D S2 = Point3D(-0.5, 0.5, 0);
 	Point3D S3 = Point3D(0.5, -0.5, 0);
+	Point3D center = Point3D(0, 0, 0);
 	
 	Vector3D dS21 = S2 - S1;
 	Vector3D dS31 = S3 - S1;
@@ -40,7 +41,6 @@ bool UnitSquare::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
 	Vector3D N = dS21.cross(dS31);
 	
 	// Normalize
-	R.normalize();
 	N.normalize();
 	
 	// Check if parallel
@@ -49,10 +49,10 @@ bool UnitSquare::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
 	}
 	
 	// Compute t value
-	Vector3D dR1S1 = R1 - S1;
-	double t = -N.dot(dR1S1) / N.dot(R);
+	Vector3D dCR1 = center - R1;
+	double t = dCR1.dot(N)/ N.dot(R);
 	
-	if(ray.intersection.t_value > t && !ray.intersection.none){
+	if(ray.intersection.t_value < t && !ray.intersection.none){
 		return false;
 	}
 	
@@ -67,7 +67,7 @@ bool UnitSquare::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
     double v = dMS1.dot(dS31);
 	
 	// Check if the intersection point belongs to the square
-	if(u >= 0.0 && u <= dS21.dot(dS21) && v >= 0.0 && v <= dS31.dot(dS31) && t > 0){
+	if(u >= 0.0 && u <= dS21.dot(dS21) && v >= 0.0 && v <= dS31.dot(dS31) && t >= 0){
 	
 		// Update intersection
 		ray.intersection.normal = modelToWorld * N;
@@ -122,7 +122,7 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
         	double t2 = -B/2*A - sqrt(D)/2*A;
 			
 			//there will be two lambda values. choose the smaller one.
-        	if(fmax(t1, t2) < 0 || t1 == t2){
+        	if(fmax(t1, t2) < 0){
 				// Intersect in wrong direction
 				return false;
 			}

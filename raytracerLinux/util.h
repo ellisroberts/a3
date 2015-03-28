@@ -144,6 +144,9 @@ struct Material {
 	
 	// Refraction index
 	double ref_idx;
+	
+	// Material reflection factor 0 - 1
+	double reflection_factor;
 };
 
 struct Intersection {
