@@ -15,6 +15,8 @@
 
 #include <iostream>
 #include <cmath>
+#include "bmp_io.h"
+#include <stdio.h>
 
 #ifndef M_PI
 #define M_PI	3.14159265358979323846
@@ -33,6 +35,82 @@ public:
 	
 private:
 	double m_data[3];
+};
+
+//Texture class that reads in a bmp image
+
+class Texture {
+
+//TO-DO double check this
+
+public:
+
+    Texture(){
+
+    }
+    
+    Texture(char *fileName){
+        //read the file
+        bmp_read(fileName, (&t_width), (&t_height), &redArray, &greenArray, &blueArray);
+    }
+
+    int getHeight()
+    {
+        return t_height;
+    } 
+
+    unsigned int getWidth()
+    {
+        return t_width;
+    }
+
+    //get the green component of pixel row, col
+    unsigned char* getGreen(int row, int col){
+        //printf("Texture::getGreen\n");
+        int offset = row*t_width + col;
+        //printf("green offset is %d\n", offset);
+        return greenArray + offset; 
+    }
+
+    //get the blue component of pixel row, col
+    unsigned char* getBlue(int row, int col){
+        //printf("Texture::getBlue\n");
+        int offset = row*t_width + col;
+        //printf("blue offset is %d\n", offset);
+        return blueArray + offset;
+    }
+
+    //get the red component of pixel row, col
+    unsigned char* getRed(int row, int col) {
+        //printf("Texture::getRed\n");
+        //position in red
+        int offset = row*t_width + col;
+        //printf("red offset is %d\n", offset);
+        return redArray + offset; 
+    }
+
+private:
+
+    unsigned long int t_width;
+    long int t_height;
+    unsigned char *redArray, *blueArray, *greenArray;
+
+};
+    
+//stores a mapping for a general polygon to a texture map
+class Mapping {
+public:
+    //Get the corresponding texture position for intersection point on polygon
+    virtual bool getTexel(int *row, int* column, int height, int width, Point3D intersection) = 0;
+
+};
+
+class SphereMapping: public Mapping {
+public:
+    //Get the corresponding texture position for intersection point on sphere
+    //We use the spherical coordinates parametrization for sphere to compute the texture position
+    virtual bool getTexel(int *row, int *column, int height, int width, Point3D intersection);
+
 };
 
 class Vector3D {
@@ -156,6 +234,12 @@ struct Intersection {
 	Vector3D normal;
 	// Material at the intersection.
 	Material* mat;
+
+        //Mapping for textures
+        bool isMap;
+        Texture text;
+        //for texture mapping
+        Point3D pointObjectCoords;
 	// Position of the intersection point on your ray.
 	// (i.e. point = ray.origin + t_value * ray.dir)
 	// This is used when you need to intersect multiply objects and
@@ -169,9 +253,11 @@ struct Intersection {
 struct Ray3D {
 	Ray3D() {
 		intersection.none = true; 
+                intersection.isMap = false; 
 	}
 	Ray3D( Point3D p, Vector3D v ) : origin(p), dir(v) {
 		intersection.none = true;
+                intersection.isMap = false;
 	}
 	
 	// Max depth recursion

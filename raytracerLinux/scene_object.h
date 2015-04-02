@@ -30,7 +30,25 @@ public:
 
 class UnitSphere : public SceneObject {
 public:
+        UnitSphere(Texture text)
+        {
+            texture = text;
+
+        }
 	bool intersect( Ray3D& ray, const Matrix4x4& worldToModel,
 			const Matrix4x4& modelToWorld );
+
+        Texture getTexture()
+        {
+            return texture;
+        }
+private:
+    Texture texture;
+};
+
+class Cylinder : public SceneObject  {
+public:
+        bool intersect(Ray3D& ray, const Matrix4x4& worldToModel, const Matrix4x4& modelToWorld);
+
 };
 

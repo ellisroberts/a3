@@ -12,6 +12,8 @@
 #include <math.h>
 #include <iostream>
 #include "light_source.h"
+#include <stdlib.h>
+
 
 std::vector<Ray3D> PointLight::get_shadow_rays(Ray3D& ray){
 	std::vector<Ray3D> shadow_rays;
@@ -81,6 +83,25 @@ void LightSource::shade( Ray3D& ray, double contribution) {
 	 
 	Colour ka = ray.intersection.mat->ambient;
 	Colour kd = ray.intersection.mat->diffuse;
+        //we have a texture
+        if (ray.intersection.isMap)
+        {
+            
+            int row, col;
+            //get texel coords
+            SphereMapping sphereMap;
+            sphereMap.getTexel(&row, &col, ray.intersection.text.getHeight(), ray.intersection.text.getWidth(), ray.intersection.pointObjectCoords);
+            //change diffuse coefficient to that of texture
+            unsigned char * red = ray.intersection.text.getRed(row,col);
+            unsigned char * green = ray.intersection.text.getGreen(row,col);
+            unsigned char * blue = ray.intersection.text.getBlue(row,col);
+            //get values for the color components in proper type
+            double RedValue = (*red)/255.0;
+            double BlueValue = (*blue)/255.0;
+            double GreenValue = (*green)/255.0;
+            kd = kd*Colour(RedValue, GreenValue, BlueValue); 
+            
+        }
 	Colour ks = ray.intersection.mat->specular;
 	Vector3D N = ray.intersection.normal;
 	Vector3D D = ray.dir;

@@ -98,7 +98,7 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
         Point3D R1 = worldToModel*ray.origin;
         Vector3D R = worldToModel*ray.dir;
 		
-		R.normalize();
+        R.normalize();
 
         Point3D pc(0,0,0);
 	
@@ -119,13 +119,13 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
         	double t2 = -B/2*A - sqrt(D)/2*A;
 			
 			//there will be two lambda values. choose the smaller one.
-        	if(fmax(t1, t2) < 1){
+        	if(fmax(t1, t2) < 0){
 				// Intersect in wrong direction
 				return false;
 			}
-			else{
+		else{
 				// Get the minimum non negative element
-				if(fmin(t1, t2) > 1){
+				if(fmin(t1, t2) > 0){
 					t = fmin(t1, t2);
 				}
 				else{
@@ -146,8 +146,184 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
 			ray.intersection.normal = modelToWorld * N;
 			ray.intersection.normal.normalize();
 			ray.intersection.point = modelToWorld * M;
+                        //we have a texture map
+                        ray.intersection.isMap = true;
+                        ray.intersection.pointObjectCoords = M;
+                        //get the texture object
+                        ray.intersection.text = getTexture();
 			ray.intersection.t_value = t;
 			ray.intersection.none = false;
 			return true;
 		}
+}
+
+
+bool Cylinder::intersect(Ray3D& ray, const Matrix4x4& worldToModel,
+		const Matrix4x4& modelToWorld ) {
+
+    Point3D origin = worldToModel*ray.origin;
+    Vector3D dir = worldToModel*ray.dir;
+		
+    dir.normalize();
+
+    Point3D pc(0,0,0);
+
+    Vector3D originVector = origin - pc;
+    
+    
+    //want to intersect p = a + lambda*d with the cylinder x**2 + y**2 = 1
+    
+    //lambda for cylinder
+    double lambda_final1= 1000;
+    //lambda for plane
+    double lambda_final2 = 1000;
+
+    //to solve for equation of cylinder
+    double A = dir[0]*dir[0] + dir[1]*dir[1];
+    double B = origin[0]*dir[0] + origin[1]*dir[1];
+    double C = origin[0]*origin[0] + origin[1]*origin[1] - 1;
+
+    double D = B*B - A*C;
+
+    //no intersection 
+    if (D < 0.0)
+    {
+        return false;
+    }
+
+    if (D > 0.0){
+ 
+        double R = sqrt(D);
+        //for solving intersection with quadric
+        double lambda1 = -B/A + sqrt(D)/A;
+        double lambda2 = -B/A - sqrt(D)/A;
+
+ 
+	//there will be two lambda values. choose the smaller one.
+	double lambdaCylinder = lambda1;
+        if ((lambda1 < 0)&&(lambda2 > 0))
+        {
+            lambdaCylinder = lambda2;
+        }
+
+        if ((lambda2 < 0)&&(lambda1 > 0))
+        {
+            lambdaCylinder = lambda1;
+        }
+        if ((lambda2 > 0)&&(lambda1 > 0))
+        {
+            if (lambda2 < lambda1)
+            {
+                lambdaCylinder = lambda2;
+            }
+        }
+
+        if ((lambda2 < 0)&&(lambda1 < 0))
+        {
+            return false;
+        }
+        
+	//the intersection point for the side
+        Point3D intersectionCylinder = origin + lambdaCylinder*dir;
+        Vector3D NormalCylinder = intersectionCylinder - pc;
+        NormalCylinder[2] = 0; 
+	NormalCylinder.normalize();
+			
+	// Update intersection if the point is within the bounds of the cylinder
+        if ((intersectionCylinder[2] <= 1) & (intersectionCylinder[2] >= 0.0))
+        {
+            
+            lambda_final1 = lambdaCylinder;
+        }
+    
+	
+        //first find the intersection the plane z = 1
+        //define the plane
+	
+	Vector3D NormalPlane = Vector3D(0,0,1);
+	
+        //Normalize
+	NormalPlane.normalize();
+        
+        //Intersection of the plane
+        Point3D intersectionPlane;
+	
+	// If ray is not paraellel to plane, compute intersection
+	if (!(fabs(NormalPlane.dot(dir)) < 1e-25f)){
+
+	    // Compute lambda value for plane at z = 0
+	    double lambdaPlane1  = (-origin[2])/dir[2];
+
+            //compute lambdaValue for plane at z = 1
+            double lambdaPlane2 = ((1-origin[2])/dir[2]);
+
+            //printf("lambda is %f\n", lambdaPlane);
+            //the intersections with both of the planes
+            Point3D intersectionPlane1 = origin + lambdaPlane1*dir;
+            Point3D intersectionPlane2 = origin + lambdaPlane2*dir;
+        
+            //we're on the tip of the cylinder and it's the closer intersection
+            if (((intersectionPlane2[0]*intersectionPlane2[0] + intersectionPlane2[1]*intersectionPlane2[1]) <= 1))
+            {               
+                intersectionPlane = intersectionPlane2;        
+                lambda_final2 = lambdaPlane2;
+                
+            }
+
+            //check if we're in the bounds of the cylinder
+
+	    if (((intersectionPlane1[0]*intersectionPlane1[0] + intersectionPlane1[1]*intersectionPlane1[1]) <= 1))
+	    {    
+              
+                //take the lesser of the 2 plane intersections                 
+                if (lambdaPlane2 < lambda_final2)
+                {       
+                    intersectionPlane = intersectionPlane2; 
+                    lambda_final2 = lambdaPlane1;
+                    //The orientation of the normal changes
+                    NormalPlane = -1*NormalPlane;
+                }
+                
+            }
+	}
+
+        if ((lambda_final1 == 1000)&&(lambda_final2 == 10000))
+        {
+            return false; 
+        }
+	
+        //choose the lesser of lambda_final1 and lambda_final2
+        if (lambda_final1 < lambda_final2)
+        {
+
+	    if(ray.intersection.t_value < lambda_final1 && !ray.intersection.none){
+		return false;
+	    }
+            //we choose the side of the cylinder intersection
+	    ray.intersection.normal = modelToWorld * NormalCylinder;
+	    ray.intersection.normal.normalize();
+	    ray.intersection.point = modelToWorld * intersectionCylinder;
+	    ray.intersection.t_value = lambda_final1;
+	    ray.intersection.none = false;
+	    return true;       
+        }
+
+        if (lambda_final2 < lambda_final1)
+        {
+
+	    if(ray.intersection.t_value < lambda_final2 && !ray.intersection.none){
+		return false;
+	    }
+            //we choose the side of the cylinder intersection
+	    ray.intersection.normal = modelToWorld * NormalPlane;
+	    ray.intersection.normal.normalize();
+	    ray.intersection.point = modelToWorld * intersectionPlane;
+	    ray.intersection.t_value = lambda_final1;
+	    ray.intersection.none = false;
+	    return true;       
+        }
+   }
+
+   return false;
+
 }
