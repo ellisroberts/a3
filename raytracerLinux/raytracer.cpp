@@ -185,24 +185,32 @@ void Raytracer::traverseScene( SceneDagNode* node, Ray3D& ray ) {
 
 void Raytracer::computeShading( Ray3D& ray ) {
 	LightListNode* curLight = _lightSource;
+	int i, N;
+	std::vector<Ray3D> shadow_rays;
+	Ray3D shadowRay;
 	for (;;) {
 		if (curLight == NULL) break;
 		// Each lightSource provides its own shading function.
 		// Shadows
-		Point3D R1 = ray.intersection.point - 0.0000001 * ray.dir;;
-		Vector3D R = curLight->light->get_position() - R1;
-		R.normalize();
-		Ray3D shadowRay(R1, R);
 		
-		traverseScene(_root, shadowRay);
-		if(shadowRay.intersection.none){
-			curLight->light->shade(ray);
-		}else{
-			Colour ka = ray.intersection.mat->ambient;
-			Colour Ia = curLight->light->get_ambient() * ka;
-			ray.col = ray.col + Ia * ka;
-			ray.col.clamp();
+		shadow_rays = curLight->light->get_shadow_rays(ray);
+		N = shadow_rays.size();
+		
+		for(i=0; i < N; i++){
+			shadowRay = shadow_rays.at(i);
+			
+			// Check intesection
+			traverseScene(_root, shadowRay);
+			if(shadowRay.intersection.none){
+				curLight->light->shade(ray, 1.0/N);
+			}else{
+				Colour ka = ray.intersection.mat->ambient;
+				Colour Ia = curLight->light->get_ambient() * ka;
+				ray.col = ray.col + (1.0/N) * Ia * ka;
+				ray.col.clamp();
+			}
 		}
+		//std::cout << ray.col << "\n";
 		curLight = curLight->next;
 	}
 }
@@ -232,6 +240,7 @@ Colour Raytracer::shadeRay( Ray3D& ray ) {
 	Colour curRayCol(0.0, 0.0, 0.0); 
 	Colour reflRayCol(0.0, 0.0, 0.0);
 	Colour refrRayCol(0.0, 0.0, 0.0);
+	
 	traverseScene(_root, ray);
 	
 	// Don't bother shading if the ray didn't hit 
@@ -247,20 +256,47 @@ Colour Raytracer::shadeRay( Ray3D& ray ) {
 		N.normalize();
 		V.normalize();
 		
-		Vector3D R = V - 2*(N.dot(V))*N;
-		Point3D R1 = ray.intersection.point;
+		// Stochastic Reflection (Glossy Effect)
+		double a = 0.01; // Blur degree
 		
+		double e1 = ((double) rand() / (RAND_MAX)) + 1;
+		double e2 = ((double) rand() / (RAND_MAX)) + 1;
+		
+		double x = -a/2 + e1 * a;
+		double y = -a/2 + e2 * a;
+		
+		Vector3D R = V - 2*(N.dot(V))*N;
 		R.normalize();
 		
-		Ray3D reflRay(R1, R);
-		reflRay.maxDepth = ray.maxDepth + 1;
+		Vector3D X(1, 0, 0);
+		Vector3D Y(0, 1, 0);
 		
-		reflRayCol = pow(0.4, ray.maxDepth+1)*shadeRay(reflRay);
+		Point3D R_perturbed_origin = ray.intersection.point - 0.0000001 * ray.dir;
+		Vector3D R_perturbed = R + x*X + y*Y;
+		R_perturbed.normalize();
+		
+		// Mirror-Like Reflection		
+		//Vector3D R = V - 2*(N.dot(V))*N;
+		//Point3D R1 = ray.intersection.point - 0.0000001 * ray.dir;
+		
+		// Define reflected ray
+		Ray3D reflRay(R_perturbed_origin, R_perturbed);
+		
+		// Check if the ray is below the surface
+		if(N.dot(R_perturbed) > 0){
+			
+			// Ray trace reflected ray 
+			reflRay.maxDepth = ray.maxDepth + 1;
+			reflRayCol = pow(ray.intersection.mat->reflection_factor, ray.maxDepth) * shadeRay(reflRay);
+		}
+		else{
+			reflRayCol = Colour(0, 0, 0);
+		}
 		
 		// Spawn Refraction
 		double n1;
 		double n2;
-		if((ray.maxDepth + 1)%2 == 0){
+		if(ray.maxDepth%2 == 0){
 		
 			// Outside/Inside
 			n1 = 1;
@@ -273,18 +309,37 @@ Colour Raytracer::shadeRay( Ray3D& ray ) {
 			n2 = 1;
 		}
 		
-		double c1 = -N.dot(V);
 		double n = n1/n2;
-		double c2 = sqrt(1-pow(n, 2) * (1 - pow(c1, 2)));
+		double k;
+		double c1 = -V.dot(N);
+		double D = 1-n * n * (1 - c1 * c1);
+		double c2 = sqrt(D);
+		Vector3D Rr;
 		
-		Point3D Rr1 = ray.intersection.point;
-		Vector3D Rr = (n * V) + (n * c1 - c2) * N;
+		// Refraction
+		if(D >= 0){
+			if(c1 >= 0){
+				k = n * c1 - c2;
+			}
+			else{
+				k = n * c1 + c2;
+			}
+			
+			Rr = k * N - n * V;
+			
+		}
+		
+		// Total reflection
+		else{
+			Rr = 2*c1 * N - V;
+		}
 		Rr.normalize();
+		Point3D Rr1 = ray.intersection.point + 0.0000001 * ray.dir;
 		
 		Ray3D refrRay(Rr1, Rr);
 		refrRay.maxDepth = ray.maxDepth + 1;
 		
-		refrRayCol = pow(0.2, ray.maxDepth+1) * shadeRay(refrRay);
+		refrRayCol = pow(0.5, ray.maxDepth) * shadeRay(refrRay);
 	}
 	curRayCol = curRayCol + reflRayCol + refrRayCol;
 	curRayCol = curRayCol;
@@ -301,44 +356,51 @@ void Raytracer::render( int width, int height, Point3D eye, Vector3D view,
 		
 	initPixelBuffer();
 	viewToWorld = initInvViewMatrix(eye, view, up);
-
+	
+	//number of points being sampled
+	int sample = 16;
+	
 	// Construct a ray for each pixel.
-	for (int i = 0; i < _scrHeight; i++) {
-		for (int j = 0; j < _scrWidth; j++) {
+   for (int i = 0; i < _scrHeight; i++) {
+ 		for (int j = 0; j < _scrWidth; j++) {
+			Colour col;
+   			for (float pixeli = i; pixeli < i + 1; pixeli = pixeli + .25)  {
+				for (float pixelj = j; pixelj < j + 1; pixelj += .25) {
 		
-			// Sets up ray origin and direction in view space, 
-			// image plane is at z = -1.
-			Point3D origin(0, 0, 0);
-			Point3D imagePlane;
-			imagePlane[0] = (-double(width)/2 + 0.5 + j)/factor;
-			imagePlane[1] = (-double(height)/2 + 0.5 + i)/factor;
-			imagePlane[2] = -1;
+					// Sets up ray origin and direction in view space, 
+					// image plane is at z = -1.
+					Point3D origin(0, 0, 0);
+					Point3D imagePlane;
+					imagePlane[0] = (-double(width)/2 + 0.5 + pixelj)/factor;
+					imagePlane[1] = (-double(height)/2 + 0.5 + pixeli)/factor;
+					imagePlane[2] = -1;
 			
-			// TODO: Convert ray to world space and call 
-			// shadeRay(ray) to generate pixel colour. 	
-			//position of pixel in world coordinates
-			Point3D pixelPointWorld;
+					// shadeRay(ray) to generate pixel colour. 	
+					//position of pixel in world coordinates
+					Point3D pixelPointWorld;
 			
-			//direction of pixel relative to camera origin
-			Vector3D pixelDirection;
+					//direction of pixel relative to camera origin
+					Vector3D pixelDirection;
             
-			//direction of the casted ray
-			Vector3D direction;
+					//direction of the casted ray
+					Vector3D direction;
 				
-			pixelPointWorld = viewToWorld*imagePlane;
-			pixelDirection = pixelPointWorld-eye;
-			Ray3D ray(eye, pixelDirection);
-			ray.maxDepth = 0;
-			ray.dir.normalize();
+					pixelPointWorld = viewToWorld*imagePlane;
+					pixelDirection = pixelPointWorld-eye;
+					Ray3D ray(eye, pixelDirection);
+					ray.maxDepth = 0;
+					ray.dir.normalize();
 			
-			Colour col = shadeRay(ray); 
-			
-			_rbuffer[i*width+j] = int(col[0]*255);
-			_gbuffer[i*width+j] = int(col[1]*255);
-			_bbuffer[i*width+j] = int(col[2]*255);
+					//sum the colours from the different ray components
+					col = col + shadeRay(ray); 
+				}
+			}	
+				//store the result of numerical integration into the pixel
+			_rbuffer[i*width+j] = int(col[0]*255/sample);
+			_gbuffer[i*width+j] = int(col[1]*255/sample);
+			_bbuffer[i*width+j] = int(col[2]*255/sample);
 		}
 	}
-
 	flushPixelBuffer(fileName);
 }
 
@@ -350,8 +412,8 @@ int main(int argc, char* argv[])
 	// change this if you're just implementing part one of the 
 	// assignment.  
 	Raytracer raytracer;
-	int width = 320; 
-	int height = 240; 
+	int width = 640/4; 
+	int height = 480/4; 
 
 	if (argc == 3) {
 		width = atoi(argv[1]);
@@ -367,37 +429,65 @@ int main(int argc, char* argv[])
 	// Defines a material for shading.
 	Material gold( Colour(0.3, 0.3, 0.3), Colour(0.75164, 0.60648, 0.22648), 
 			Colour(0.628281, 0.555802, 0.366065), 
-			51.2 , 0.27049);
+			51.2 , 0.27049, 0.3);
 	
 	Material jade( Colour(0, 0, 0), Colour(0.54, 0.89, 0.63), 
 			Colour(0.316228, 0.316228, 0.316228), 
-			12.8 , 1.627);
+			12.8 , 1.627, 0.25);
+			
+	Material metal( Colour(0.1, 0.1, 0.1), Colour(0.6, 0.6, 0.6), 
+			Colour(0.7, 0.7, 0.3), 
+			51.2 , 1.627, 0.8);
+			
+	Material glass( Colour(0.0, 0.0, 0.0), Colour(0.588235, 0.670588, 0.729412), 
+			Colour(0.9, 0.9, 0.9), 
+			96 , 1.5, 0.8);
+			
+	Material ruby( Colour(0.1745, 0.01175, 0.01175), Colour(0.61424, 0.04136, 0.04136), 
+			Colour(0.727811, 0.626959, 0.626959), 
+			76.8 , 1.5, 0.3);
+	
+	Material obsedian( Colour(0.05375, 0.05, 0.06625), Colour(0.18275, 0.17, 0.22525), 
+			Colour(0.332741, 0.328634, 0.346435), 
+			38.4 , 1.5, 0.4);
 
 	// Defines a point light source.
-	raytracer.addLightSource( new PointLight(Point3D(0, 0, 5), 
+	raytracer.addLightSource( new ParallelogramLight(Point3D(0, 0, 5), Vector3D(2, 0, 0), Vector3D(0, 2, 0),
 				Colour(0.9, 0.9, 0.9) ) );
+	//raytracer.addLightSource( new ParallelogramLight(Point3D(0, 0, 5), Vector3D(2, 0, 0), Vector3D(0, 2, 0),
+	//			Colour(0.9, 0.9, 0.9) ) );
 
 	// Add a unit square into the scene with material mat.
-	//SceneDagNode* sphere = raytracer.addObject( new UnitSphere(), &gold );
-	SceneDagNode* plane = raytracer.addObject( new UnitSquare(), &jade );
-	SceneDagNode* plane2 = raytracer.addObject( new UnitSquare(), &gold );
+	SceneDagNode* sphere = raytracer.addObject( new UnitSphere(), &ruby );
+	SceneDagNode* sphere2 = raytracer.addObject( new UnitSphere(), &jade );
+	SceneDagNode* ground = raytracer.addObject( new UnitSquare(), &metal );
+	SceneDagNode* left_plane = raytracer.addObject( new UnitSquare(), &gold );
+	SceneDagNode* up_plane = raytracer.addObject( new UnitSquare(), &ruby );
+	//SceneDagNode* plane4 = raytracer.addObject( new UnitSquare(), &glass );
 	
 	// Apply some transformations to the unit square.
-	double factor1[3] = { 1.0, 2.0, 1.0 };
+	double factor1[3] = { 1, 1, 1 };
 	double factor2[3] = { 6.0, 6.0, 6.0 };
-	//double factor2[3] = { 6.0, 6.0, 6.0 };
-	//raytracer.translate(sphere, Vector3D(0, 0, -5));	
-	//raytracer.rotate(sphere, 'x', -45); 
-	//raytracer.rotate(sphere, 'z', 45); 
-	//raytracer.scale(sphere, Point3D(0, 0, 0), factor1);
+	double factor3[3] = { 2, 2, 1};
 
-	raytracer.translate(plane, Vector3D(0, 0, -7));	
-	raytracer.rotate(plane, 'z', 45); 
-	raytracer.scale(plane, Point3D(0, 0, 0), factor2);
+	raytracer.translate(sphere, Vector3D(0, 0, -8));	
+	raytracer.rotate(sphere, 'z', 45); 
+	raytracer.scale(sphere, Point3D(0, 0, 0), factor1);
 	
-	raytracer.translate(plane2, Vector3D(0, 0, -4));	
-	raytracer.rotate(plane2, 'z', 45); 
-	raytracer.scale(plane2, Point3D(0, 0, 0), factor1);
+	raytracer.translate(sphere2, Vector3D(0, 0, -4));	
+	raytracer.scale(sphere2, Point3D(0, 0, 0), factor3);
+
+	raytracer.translate(ground, Vector3D(0, 0, -12));	
+	raytracer.scale(ground, Point3D(0, 0, 0), factor2);
+	
+	raytracer.translate(left_plane, Vector3D(-5, 0, -8));	
+	raytracer.rotate(left_plane, 'y', 90); 
+	raytracer.scale(left_plane, Point3D(0, 0, 0), factor2);
+	
+	raytracer.translate(up_plane, Vector3D(0, 4, -8));	
+	raytracer.rotate(up_plane, 'y', 90);
+	raytracer.rotate(up_plane, 'x', 90); 
+	raytracer.scale(up_plane, Point3D(0, 0, 0), factor2);
 
 	// Render the scene, feel free to make the image smaller for
 	// testing purposes.	

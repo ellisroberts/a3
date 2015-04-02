@@ -42,6 +42,7 @@ bool UnitSquare::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
 	
 	// Normalize
 	N.normalize();
+	//R.normalize();
 	
 	// Check if parallel
 	if(fabs(N.dot(R)) < 1e-25f){
@@ -107,10 +108,6 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
         double B = 2*R.dot(R1-pc);
         double C = (R1 - pc).dot(R1 - pc) - 1;	
         double D = B*B-4*A*C;
- 
-        //printf("origin is %f %f %f", origin[0], origin[1], origin[2]);
-        //printf("dir is %f %f %f", dir[0], dir[1], dir[2]);
-        //printf("point is A is %f B is %f C is %f D is %f\n", A, B, C, D);
 
         // No intersection
         if (D < 0.0)
@@ -122,13 +119,13 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
         	double t2 = -B/2*A - sqrt(D)/2*A;
 			
 			//there will be two lambda values. choose the smaller one.
-        	if(fmax(t1, t2) < 0){
+        	if(fmax(t1, t2) < 1){
 				// Intersect in wrong direction
 				return false;
 			}
 			else{
 				// Get the minimum non negative element
-				if(fmin(t1, t2) > 0){
+				if(fmin(t1, t2) > 1){
 					t = fmin(t1, t2);
 				}
 				else{
@@ -136,7 +133,7 @@ bool UnitSphere::intersect( Ray3D& ray, const Matrix4x4& worldToModel,
 				}
 			}
 			
-			if(ray.intersection.t_value > t && !ray.intersection.none){
+			if(ray.intersection.t_value < t && !ray.intersection.none){
 				return false;
 			}
 	
