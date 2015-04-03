@@ -17,6 +17,7 @@
 #include <iostream>
 #include <cstdlib>
 
+
 Raytracer::Raytracer() : _lightSource(NULL) {
 	_root = new SceneDagNode();
 }
@@ -245,7 +246,7 @@ Colour Raytracer::shadeRay( Ray3D& ray ) {
 	
 	// Don't bother shading if the ray didn't hit 
 	// anything.
-	if (!ray.intersection.none && (ray.maxDepth < 3)) {
+	if (!ray.intersection.none && (ray.maxDepth < 5)) {
 		computeShading(ray);
 		curRayCol = ray.col;
 		
@@ -296,7 +297,7 @@ Colour Raytracer::shadeRay( Ray3D& ray ) {
 		// Spawn Refraction
 		double n1;
 		double n2;
-		if(ray.maxDepth%2 == 0){
+		if(ray.refraction_depth%2 == 0){
 		
 			// Outside/Inside
 			n1 = 1;
@@ -311,38 +312,31 @@ Colour Raytracer::shadeRay( Ray3D& ray ) {
 		
 		double n = n1/n2;
 		double k;
-		double c1 = -V.dot(N);
-		double D = 1-n * n * (1 - c1 * c1);
-		double c2 = sqrt(D);
+		Vector3D I = -ray.dir;
+		I.normalize();
+		double D = 1.0 -n * n * (1.0 - N.dot(I) * N.dot(I));
+		double square_root = sqrt(D);
 		Vector3D Rr;
 		
 		// Refraction
+		Point3D Rr1;
 		if(D >= 0){
-			if(c1 >= 0){
-				k = n * c1 - c2;
-			}
-			else{
-				k = n * c1 + c2;
-			}
 			
-			Rr = k * N - n * V;
-			
+			Rr = (n * N.dot(I) - square_root) * N - n*I;
+			Rr1 = ray.intersection.point + 0.0000001 * ray.dir;
+			Rr.normalize();
+			Ray3D refrRay(Rr1, Rr);
+			refrRay.maxDepth = ray.maxDepth + 1;
+			refrRay.refraction_depth = ray.refraction_depth + 1;
+			refrRayCol = pow(0.8, ray.maxDepth) * shadeRay(refrRay);
 		}
 		
 		// Total reflection
 		else{
-			Rr = 2*c1 * N - V;
+			refrRayCol = Colour(0, 0, 0);
 		}
-		Rr.normalize();
-		Point3D Rr1 = ray.intersection.point + 0.0000001 * ray.dir;
-		
-		Ray3D refrRay(Rr1, Rr);
-		refrRay.maxDepth = ray.maxDepth + 1;
-		
-		refrRayCol = pow(0.5, ray.maxDepth) * shadeRay(refrRay);
 	}
 	curRayCol = curRayCol + reflRayCol + refrRayCol;
-	curRayCol = curRayCol;
 	curRayCol.clamp();
 	return curRayCol; 
 }	
@@ -362,6 +356,7 @@ void Raytracer::render( int width, int height, Point3D eye, Vector3D view,
 	
 	// Construct a ray for each pixel.
    for (int i = 0; i < _scrHeight; i++) {
+       printf("i is %d\n", i);
  		for (int j = 0; j < _scrWidth; j++) {
 			Colour col;
    			for (float pixeli = i; pixeli < i + 1; pixeli = pixeli + .25)  {
@@ -389,6 +384,7 @@ void Raytracer::render( int width, int height, Point3D eye, Vector3D view,
 					pixelDirection = pixelPointWorld-eye;
 					Ray3D ray(eye, pixelDirection);
 					ray.maxDepth = 0;
+					ray.refraction_depth = 0;
 					ray.dir.normalize();
 			
 					//sum the colours from the different ray components
@@ -412,8 +408,8 @@ int main(int argc, char* argv[])
 	// change this if you're just implementing part one of the 
 	// assignment.  
 	Raytracer raytracer;
-	int width = 640/4; 
-	int height = 480/4; 
+	int width = 640/2; 
+	int height = 480/2; 
 
 	if (argc == 3) {
 		width = atoi(argv[1]);
@@ -441,7 +437,7 @@ int main(int argc, char* argv[])
 			
 	Material glass( Colour(0.0, 0.0, 0.0), Colour(0.588235, 0.670588, 0.729412), 
 			Colour(0.9, 0.9, 0.9), 
-			96 , 1.5, 0.8);
+			96 , 1.3, 0.8);
 			
 	Material ruby( Colour(0.1745, 0.01175, 0.01175), Colour(0.61424, 0.04136, 0.04136), 
 			Colour(0.727811, 0.626959, 0.626959), 
@@ -457,25 +453,27 @@ int main(int argc, char* argv[])
 	//raytracer.addLightSource( new ParallelogramLight(Point3D(0, 0, 5), Vector3D(2, 0, 0), Vector3D(0, 2, 0),
 	//			Colour(0.9, 0.9, 0.9) ) );
 
+	Texture glass_texture("glass.bmp");
+	Texture ice_texture("ice.bmp");
 	// Add a unit square into the scene with material mat.
-	SceneDagNode* sphere = raytracer.addObject( new UnitSphere(), &ruby );
-	SceneDagNode* sphere2 = raytracer.addObject( new UnitSphere(), &jade );
-	SceneDagNode* ground = raytracer.addObject( new UnitSquare(), &metal );
+	SceneDagNode* sphere = raytracer.addObject( new UnitSphere(glass_texture), &glass);
+	SceneDagNode* sphere2 = raytracer.addObject( new UnitSphere(ice_texture), &glass );
+	SceneDagNode* ground = raytracer.addObject( new UnitSquare(), &ruby );
 	SceneDagNode* left_plane = raytracer.addObject( new UnitSquare(), &gold );
-	SceneDagNode* up_plane = raytracer.addObject( new UnitSquare(), &ruby );
+	SceneDagNode* up_plane = raytracer.addObject( new UnitSquare(), &jade );
+	SceneDagNode* cylinder = raytracer.addObject(new Cylinder(), &ruby);
 	//SceneDagNode* plane4 = raytracer.addObject( new UnitSquare(), &glass );
 	
 	// Apply some transformations to the unit square.
 	double factor1[3] = { 1, 1, 1 };
-	double factor2[3] = { 6.0, 6.0, 6.0 };
-	double factor3[3] = { 2, 2, 1};
+	double factor2[3] = { 15.0, 15.0, 15.0 };
 
 	raytracer.translate(sphere, Vector3D(0, 0, -8));	
 	raytracer.rotate(sphere, 'z', 45); 
 	raytracer.scale(sphere, Point3D(0, 0, 0), factor1);
 	
-	raytracer.translate(sphere2, Vector3D(0, 0, -4));	
-	raytracer.scale(sphere2, Point3D(0, 0, 0), factor3);
+	raytracer.translate(sphere2, Vector3D(0, 0, -3));	
+	raytracer.scale(sphere2, Point3D(0, 0, 0), factor1);
 
 	raytracer.translate(ground, Vector3D(0, 0, -12));	
 	raytracer.scale(ground, Point3D(0, 0, 0), factor2);
@@ -488,6 +486,11 @@ int main(int argc, char* argv[])
 	raytracer.rotate(up_plane, 'y', 90);
 	raytracer.rotate(up_plane, 'x', 90); 
 	raytracer.scale(up_plane, Point3D(0, 0, 0), factor2);
+
+	raytracer.translate(cylinder, Vector3D(-5, -5, -5));	
+	raytracer.rotate(cylinder, 'z', 45); 
+	raytracer.rotate(cylinder, 'x', 45); 
+	raytracer.scale(cylinder, Point3D(0, 0, 0), factor1);
 
 	// Render the scene, feel free to make the image smaller for
 	// testing purposes.	

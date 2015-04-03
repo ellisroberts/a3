@@ -262,7 +262,7 @@ struct Ray3D {
 	
 	// Max depth recursion
 	int maxDepth;
-	
+	int refraction_depth;
 	// Origin and direction of the ray.
 	Point3D origin;
 	Vector3D dir;

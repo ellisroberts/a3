@@ -1,0 +1,11 @@
+Introduction
+
+Raytracing is a different method of rendering a scene then we have been used to. Rather than projecting geometry onto a viewing plane, as we did before, we instead cast a ray from the pixel onto the scene for each pixel. We then use the intersections with the rays and the objects and the normals of the objects in order to calculate howq much light is being redirected back to the light source(s) in order to determine how each pixel with be colored.
+
+For this Assignment, the goal was to implement a raytracer, first with basic shapes and basic features, such as phong shading, and later on with extended features, such as reflection/refraction, texture mapping, and extended light sources and shadows. This purpose of this report is to go through the features one by one and discuss how they are implemented in the code, and if necessary, discuss the mathematics that drive their application.
+
+Basic Objects
+
+Initially, the basic shapes that we are tryign to render are a square and a sphere. In order to be able to render these appropriately, we need to be able to compute the intersection points with the ray and these objects and the normals at said points.
+
+ For the square, we essentially just had to intersect the ray with the plane that the square is contained in and then determine whether the intersection point was within the area that comprised the square. So we parametrized the ray as ray.origin + lambda*ray.direction (in the code, ray.origin is R and ray.direction is R1). Then we subsitute this into the equationm for a plane (p - p0).n = 0, by substituting the equation for the ray into p. We know the normal is points 
